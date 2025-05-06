@@ -1,4 +1,3 @@
-// USE REQUIRE INSTEAD OF IMPORT
 const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
@@ -26,7 +25,6 @@ const verifyJwt = (req, res, next) => {
   }
 };
 
-// Updated Admin login using DB, bcrypt, and JWT
 router.post("/login", async (req, res) => {
   console.log("Login attempt:", req.body);
   try {
@@ -45,8 +43,8 @@ router.post("/login", async (req, res) => {
     if (!adminUser) {
       return res.status(401).json({ message: "Invalid username or password" });
     }
-    // plain text password
-    const passwordMatch = password === adminUser.password;
+    // bcrypt password
+    const passwordMatch = await bcrypt.compare(password, adminUser.password);
     console.log("passwordMatch:", passwordMatch);
     if (!passwordMatch) {
       return res.status(401).json({ message: "Invalid username or password" });
@@ -80,34 +78,21 @@ router.post("/login", async (req, res) => {
 
 // Create new tracking using DB
 router.post("/tracking", verifyJwt, async (req, res) => {
-  console.log("Creating tracking");
   try {
     const trackingNumber = generateTrackingNumber();
-    console.log("trackingNumber", trackingNumber);
-    console.log(req.body);
+
     const {
       shipDate,
       deliveryDate,
       estimatedDeliveryDate,
-      recipientName, // Match schema names
-      recipientPhone, // Match schema names
+      recipientName,
+      recipientPhone,
       destination,
       origin,
       status,
       service,
     } = req.body;
 
-    // Basic validation
-    // log all value key value
-    console.log("shipDate", shipDate);
-    console.log("deliveryDate", deliveryDate);
-    console.log("estimatedDeliveryDate", estimatedDeliveryDate);
-    console.log("recipientName", recipientName);
-    console.log("recipientPhone", recipientPhone);
-    console.log("destination", destination);
-    console.log("origin", origin);
-    console.log("status", status);
-    console.log("service", service);
     if (
       !recipientName ||
       !recipientPhone ||
@@ -123,7 +108,7 @@ router.post("/tracking", verifyJwt, async (req, res) => {
 
     const newTrackingData = {
       trackingNumber,
-      shipDate: shipDate ? new Date(shipDate) : new Date(), // Convert to Date objects for Drizzle timestamp mode
+      shipDate: shipDate ? new Date(shipDate) : new Date(),
       deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
       estimatedDeliveryDate: estimatedDeliveryDate
         ? new Date(estimatedDeliveryDate)
@@ -144,7 +129,6 @@ router.post("/tracking", verifyJwt, async (req, res) => {
     res.status(201).json(createdTracking);
   } catch (error) {
     console.error("Create tracking error:", error);
-    // Check for specific DB errors if needed (e.g., unique constraint)
     if (error.message.includes("UNIQUE constraint failed")) {
       return res.status(409).json({
         message: "Tracking number conflict or other unique field violation.",
@@ -157,7 +141,7 @@ router.post("/tracking", verifyJwt, async (req, res) => {
 // Get all trackings using DB
 router.get("/tracking", verifyJwt, async (req, res) => {
   try {
-    const trackings = await db.query.trackings.findMany(); // Use Drizzle query API
+    const trackings = await db.query.trackings.findMany();
     res.json(trackings);
   } catch (error) {
     console.error("Get all trackings error:", error);
@@ -189,22 +173,20 @@ router.put("/tracking/:trackingNumber", verifyJwt, async (req, res) => {
     const trackingNumber = req.params.trackingNumber;
     const updates = req.body;
 
-    // Convert date strings to Date objects if present
     if (updates.shipDate) updates.shipDate = new Date(updates.shipDate);
     if (updates.deliveryDate)
       updates.deliveryDate = new Date(updates.deliveryDate);
     if (updates.estimatedDeliveryDate)
       updates.estimatedDeliveryDate = new Date(updates.estimatedDeliveryDate);
 
-    // Ensure trackingNumber is not in the updates object if present
     delete updates.trackingNumber;
-    delete updates.id; // Prevent updating primary key
+    delete updates.id;
 
     const [updatedTracking] = await db
       .update(schema.trackings)
       .set(updates)
       .where(eq(schema.trackings.trackingNumber, trackingNumber))
-      .returning(); // Return the updated object
+      .returning();
 
     if (!updatedTracking) {
       return res.status(404).json({ message: "Tracking not found" });
@@ -235,17 +217,14 @@ router.delete("/tracking/:trackingNumber", verifyJwt, async (req, res) => {
   }
 });
 
-// Search trackings using DB (Example: Search by tracking number or recipient name)
+// Search trackings using DB
 router.get("/tracking/search/:query", verifyJwt, async (req, res) => {
   try {
-    const query = `%${req.params.query}%`; // Prepare query for LIKE operator
+    const query = `%${req.params.query}%`;
     const results = await db
       .select()
       .from(schema.trackings)
       .where(like(schema.trackings.trackingNumber, query));
-    // Add more fields to search if needed:
-    // .orWhere(like(schema.trackings.recipientName, query))
-    // .orWhere(like(schema.trackings.status, query));
 
     res.json(results);
   } catch (error) {
