@@ -1,72 +1,34 @@
+// USE REQUIRE INSTEAD OF IMPORT
 const express = require("express");
 const router = express.Router();
-const bcrypt = require("bcrypt"); // Import bcrypt
-
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const { generateTrackingNumber } = require("../utils/trackingGenerator.mjs");
-const { db, schema } = require("../db/index.mjs"); // Or ../db/index.mjs if you renamed it
+const { db, schema } = require("../db/index.mjs");
 const { eq, like } = require("drizzle-orm");
 
-// Middleware to check admin authentication using DB and bcrypt
-const adminAuth = async (req, res, next) => {
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// New verifyJwt middleware
+const verifyJwt = (req, res, next) => {
   const authHeader = req.headers.authorization;
-  console.log("Auth Header:", authHeader); // Log header
-  if (!authHeader || !authHeader.startsWith("Basic ")) {
-    return res
-      .status(401)
-      .json({
-        message: "Unauthorized: Admin access required (Missing Basic Auth)",
-      });
-  }
-  const credentials = Buffer.from(authHeader.split(" ")[1], "base64").toString(
-    "ascii"
-  );
-  console.log("Decoded Credentials:", credentials); // Log decoded string
-  const [username, password] = credentials.split(":");
-
-  if (!username || !password) {
-    return res
-      .status(401)
-      .json({ message: "Unauthorized: Invalid credentials format" });
-  }
-  console.log(`Attempting auth for username: ${username}`); // Log username
-
-  try {
-    const adminUser = await db.query.admins.findFirst({
-      where: eq(schema.admins.username, username),
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.split(" ")[1];
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+      if (err) {
+        return res.status(401).json({ message: "Unauthorized: Invalid token" });
+      }
+      req.admin = decoded; // Contains { userId, username }
+      next();
     });
-
-    console.log("Admin user found in DB:", adminUser); // Log the found user object (or undefined)
-
-    if (!adminUser) {
-      console.warn(`Authentication failed: User '${username}' not found.`);
-      return res
-        .status(401)
-        .json({ message: "Unauthorized: Invalid credentials" });
-    }
-
-    // Compare provided password with stored hash
-    const passwordMatch = password === adminUser.password;
-    console.log(`Password comparison result for '${username}':`, passwordMatch); // Log comparison result
-
-    if (!passwordMatch) {
-      console.warn(
-        `Authentication failed: Incorrect password for user '${username}'.`
-      );
-      return res
-        .status(401)
-        .json({ message: "Unauthorized: Invalid credentials" });
-    }
-
-    console.log(`Authentication successful for user '${username}'.`);
-    next();
-  } catch (error) {
-    console.error("Admin auth error:", error);
-    res.status(500).json({ message: "Server error during authentication" });
+  } else {
+    res.status(401).json({ message: "Unauthorized: Missing Bearer token" });
   }
 };
 
-// Admin login using DB and bcrypt
+// Updated Admin login using DB, bcrypt, and JWT
 router.post("/login", async (req, res) => {
+  console.log("Login attempt:", req.body);
   try {
     const { username, password } = req.body;
 
@@ -79,22 +41,37 @@ router.post("/login", async (req, res) => {
     const adminUser = await db.query.admins.findFirst({
       where: eq(schema.admins.username, username),
     });
-
-    // Compare provided password with stored hash
-    if (!adminUser || !(await bcrypt.compare(password, adminUser.password))) {
+    console.log("adminUser:", adminUser);
+    if (!adminUser) {
+      return res.status(401).json({ message: "Invalid username or password" });
+    }
+    // plain text password
+    const passwordMatch = password === adminUser.password;
+    console.log("passwordMatch:", passwordMatch);
+    if (!passwordMatch) {
       return res.status(401).json({ message: "Invalid username or password" });
     }
 
-    // Generate a token - IMPORTANT: Basic Auth token reveals password hash if not careful.
-    // Consider using JWT for session management instead of sending Basic token back.
-    const token = Buffer.from(`${username}:${password}`).toString("base64"); // Still sends plain password in token!
+    // Ensure adminUser.id exists and is used as userId
+    const userId = adminUser.id; // Assuming your admin table has an 'id' field
+    console.log("userId:", userId);
+    if (userId === undefined) {
+      console.error(
+        "Admin user object does not have an 'id' field:",
+        adminUser
+      );
+      return res
+        .status(500)
+        .json({ message: "Server configuration error: User ID missing." });
+    }
 
-    res.status(200).json({
-      message: "Login successful",
-      // Sending back the Basic token like this might not be ideal for security.
-      // A session token (like JWT) is usually preferred after successful login.
-      token: token,
-    });
+    const token = jwt.sign(
+      { userId: userId, username: adminUser.username },
+      JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+    console.log("token:", token);
+    res.status(200).json({ token });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error during login" });
@@ -102,7 +79,7 @@ router.post("/login", async (req, res) => {
 });
 
 // Create new tracking using DB
-router.post("/tracking", adminAuth, async (req, res) => {
+router.post("/tracking", verifyJwt, async (req, res) => {
   console.log("Creating tracking");
   try {
     const trackingNumber = generateTrackingNumber();
@@ -168,18 +145,16 @@ router.post("/tracking", adminAuth, async (req, res) => {
     console.error("Create tracking error:", error);
     // Check for specific DB errors if needed (e.g., unique constraint)
     if (error.message.includes("UNIQUE constraint failed")) {
-      return res
-        .status(409)
-        .json({
-          message: "Tracking number conflict or other unique field violation.",
-        });
+      return res.status(409).json({
+        message: "Tracking number conflict or other unique field violation.",
+      });
     }
     res.status(500).json({ message: "Server error creating tracking" });
   }
 });
 
 // Get all trackings using DB
-router.get("/tracking", adminAuth, async (req, res) => {
+router.get("/tracking", verifyJwt, async (req, res) => {
   try {
     const trackings = await db.query.trackings.findMany(); // Use Drizzle query API
     res.json(trackings);
@@ -190,7 +165,7 @@ router.get("/tracking", adminAuth, async (req, res) => {
 });
 
 // Get tracking by number using DB
-router.get("/tracking/:trackingNumber", adminAuth, async (req, res) => {
+router.get("/tracking/:trackingNumber", verifyJwt, async (req, res) => {
   try {
     const trackingNumber = req.params.trackingNumber;
     const tracking = await db.query.trackings.findFirst({
@@ -208,7 +183,7 @@ router.get("/tracking/:trackingNumber", adminAuth, async (req, res) => {
 });
 
 // Update tracking using DB
-router.put("/tracking/:trackingNumber", adminAuth, async (req, res) => {
+router.put("/tracking/:trackingNumber", verifyJwt, async (req, res) => {
   try {
     const trackingNumber = req.params.trackingNumber;
     const updates = req.body;
@@ -241,7 +216,7 @@ router.put("/tracking/:trackingNumber", adminAuth, async (req, res) => {
 });
 
 // Delete tracking using DB
-router.delete("/tracking/:trackingNumber", adminAuth, async (req, res) => {
+router.delete("/tracking/:trackingNumber", verifyJwt, async (req, res) => {
   try {
     const trackingNumber = req.params.trackingNumber;
     const result = await db
@@ -260,7 +235,7 @@ router.delete("/tracking/:trackingNumber", adminAuth, async (req, res) => {
 });
 
 // Search trackings using DB (Example: Search by tracking number or recipient name)
-router.get("/tracking/search/:query", adminAuth, async (req, res) => {
+router.get("/tracking/search/:query", verifyJwt, async (req, res) => {
   try {
     const query = `%${req.params.query}%`; // Prepare query for LIKE operator
     const results = await db
