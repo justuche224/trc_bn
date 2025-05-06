@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Tracking Test</title>
+    <style>
+        .tracking-item {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        .edit-form {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+        }
+
+        .edit-form.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+
+        .dimensions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .dimensions input {
+            width: 60px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Tracking Test</h1>
+
+    <h2>Create Tracking</h2>
+    <form id="createForm">
+        <div class="form-group">
+            <label>Location:</label>
+            <input type="text" name="location" required>
+        </div>
+        <div class="form-group">
+            <label>Status:</label>
+            <select name="status" required>
+                <option value="processing">Processing</option>
+                <option value="in-transit">In Transit</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Recipient:</label>
+            <input type="text" name="recipient">
+        </div>
+        <div class="form-group">
+            <label>Sender:</label>
+            <input type="text" name="sender">
+        </div>
+        <div class="form-group">
+            <label>Weight (kg):</label>
+            <input type="number" name="weight" step="0.1">
+        </div>
+        <div class="form-group">
+            <label>Dimensions (cm):</label>
+            <div class="dimensions">
+                <input type="number" name="length" placeholder="Length">
+                <input type="number" name="width" placeholder="Width">
+                <input type="number" name="height" placeholder="Height">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Priority:</label>
+            <select name="priority">
+                <option value="standard">Standard</option>
+                <option value="express">Express</option>
+                <option value="priority">Priority</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Notes:</label>
+            <input type="text" name="notes">
+        </div>
+        <button type="submit">Create Tracking</button>
+    </form>
+
+    <h2>All Trackings</h2>
+    <button onclick="getAllTrackings()">Refresh Trackings</button>
+    <div id="trackings"></div>
+
+    <script>
+        async function createTracking(event) {
+            event.preventDefault();
+            const form = event.target;
+            const data = {
+                location: form.location.value,
+                status: form.status.value,
+                recipient: form.recipient.value,
+                sender: form.sender.value,
+                weight: parseFloat(form.weight.value),
+                dimensions: {
+                    length: parseFloat(form.length.value),
+                    width: parseFloat(form.width.value),
+                    height: parseFloat(form.height.value)
+                },
+                priority: form.priority.value,
+                notes: form.notes.value
+            };
+            console.log(data)
+            try {
+                const response = await fetch('http://localhost:3000/api/admin/tracking', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Basic YWRtaW46YWRtaW4='
+                    },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                console.log('Created tracking:', result);
+                form.reset();
+                getAllTrackings();
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function updateTracking(trackingNumber) {
+            const form = document.getElementById(`edit-form-${trackingNumber}`);
+            const data = {
+                location: form.location.value,
+                status: form.status.value,
+                recipient: form.recipient.value,
+                sender: form.sender.value,
+                weight: parseFloat(form.weight.value),
+                dimensions: {
+                    length: parseFloat(form.length.value),
+                    width: parseFloat(form.width.value),
+                    height: parseFloat(form.height.value)
+                },
+                priority: form.priority.value,
+                notes: form.notes.value
+            };
+
+            try {
+                const response = await fetch(`http://localhost:3000/api/admin/tracking/${trackingNumber}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Basic YWRtaW46YWRtaW4='
+                    },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                console.log('Updated tracking:', result);
+                getAllTrackings();
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function toggleEditForm(trackingNumber) {
+            const form = document.getElementById(`edit-form-${trackingNumber}`);
+            form.classList.toggle('active');
+        }
+
+        async function deleteTracking(trackingNumber) {
+            if (confirm('Are you sure you want to delete this tracking?')) {
+                try {
+                    const response = await fetch(`http://localhost:3000/api/admin/tracking/${trackingNumber}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': 'Basic YWRtaW46YWRtaW4='
+                        }
+                    });
+                    const result = await response.json();
+                    console.log('Deleted tracking:', result);
+                    getAllTrackings();
+                } catch (error) {
+                    console.error('Error:', error);
+                }
+            }
+        }
+
+        async function getAllTrackings() {
+            try {
+                const response = await fetch('http://localhost:3000/api/admin/tracking', {
+                    headers: {
+                        'Authorization': 'Basic YWRtaW46YWRtaW4='
+                    }
+                });
+                const trackings = await response.json();
+                const trackingsDiv = document.getElementById('trackings');
+
+                trackingsDiv.innerHTML = trackings.map(tracking => `
+                    <div class="tracking-item">
+                        <h3>Tracking Number: ${tracking.trackingNumber}</h3>
+                        <p>Location: ${tracking.location}</p>
+                        <p>Status: ${tracking.status}</p>
+                        <p>Recipient: ${tracking.recipient}</p>
+                        <p>Sender: ${tracking.sender}</p>
+                        <p>Weight: ${tracking.weight} kg</p>
+                        <p>Dimensions: ${tracking.dimensions.length}x${tracking.dimensions.width}x${tracking.dimensions.height} cm</p>
+                        <p>Priority: ${tracking.priority}</p>
+                        <p>Created: ${new Date(tracking.shippingDate).toLocaleString()}</p>
+                        <p>Estimated Delivery: ${new Date(tracking.estimatedDelivery).toLocaleString()}</p>
+                        <button onclick="toggleEditForm('${tracking.trackingNumber}')">Edit</button>
+                        <button onclick="deleteTracking('${tracking.trackingNumber}')">Delete</button>
+                        
+                        <form id="edit-form-${tracking.trackingNumber}" class="edit-form">
+                            <div class="form-group">
+                                <label>Location:</label>
+                                <input type="text" name="location" value="${tracking.location}">
+                            </div>
+                            <div class="form-group">
+                                <label>Status:</label>
+                                <select name="status">
+                                    <option value="processing" ${tracking.status === 'processing' ? 'selected' : ''}>Processing</option>
+                                    <option value="in-transit" ${tracking.status === 'in-transit' ? 'selected' : ''}>In Transit</option>
+                                    <option value="delivered" ${tracking.status === 'delivered' ? 'selected' : ''}>Delivered</option>
+                                    <option value="cancelled" ${tracking.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Recipient:</label>
+                                <input type="text" name="recipient" value="${tracking.recipient}">
+                            </div>
+                            <div class="form-group">
+                                <label>Sender:</label>
+                                <input type="text" name="sender" value="${tracking.sender}">
+                            </div>
+                            <div class="form-group">
+                                <label>Weight (kg):</label>
+                                <input type="number" name="weight" value="${tracking.weight}" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label>Dimensions (cm):</label>
+                                <div class="dimensions">
+                                    <input type="number" name="length" value="${tracking.dimensions.length}" placeholder="Length">
+                                    <input type="number" name="width" value="${tracking.dimensions.width}" placeholder="Width">
+                                    <input type="number" name="height" value="${tracking.dimensions.height}" placeholder="Height">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Priority:</label>
+                                <select name="priority">
+                                    <option value="standard" ${tracking.priority === 'standard' ? 'selected' : ''}>Standard</option>
+                                    <option value="express" ${tracking.priority === 'express' ? 'selected' : ''}>Express</option>
+                                    <option value="priority" ${tracking.priority === 'priority' ? 'selected' : ''}>Priority</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Notes:</label>
+                                <input type="text" name="notes" value="${tracking.notes}">
+                            </div>
+                            <button type="button" onclick="updateTracking('${tracking.trackingNumber}')">Update</button>
+                        </form>
+
+                        <h4>History</h4>
+                        <ul>
+                            ${tracking.history.map(entry => `
+                                <li>
+                                    ${new Date(entry.timestamp).toLocaleString()} - 
+                                    ${entry.status} at ${entry.location}
+                                    ${entry.notes ? `- ${entry.notes}` : ''}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        document.getElementById('createForm').addEventListener('submit', createTracking);
+        getAllTrackings();
+    </script>
+</body>
+
+</html>
