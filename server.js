@@ -2,6 +2,11 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const adminRoutes = require("./routes/admin.js");
+// Import public routes (note: this uses dynamic import since it's an ES module)
+let publicRoutes;
+import("./routes/public.mjs").then((module) => {
+  publicRoutes = module.default;
+});
 
 const app = express();
 
@@ -14,6 +19,14 @@ app.use(express.static(path.join(__dirname)));
 
 // Routes
 app.use("/api/admin", adminRoutes);
+// Add public routes once they're loaded
+app.use("/api/public", (req, res, next) => {
+  if (publicRoutes) {
+    return publicRoutes(req, res, next);
+  } else {
+    return res.status(500).json({ message: "Public routes not initialized" });
+  }
+});
 
 // Serve the test.html file
 app.get("/", (req, res) => {

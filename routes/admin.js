@@ -83,6 +83,7 @@ router.post("/tracking", verifyJwt, async (req, res) => {
   console.log("Creating tracking");
   try {
     const trackingNumber = generateTrackingNumber();
+    console.log("trackingNumber", trackingNumber);
     console.log(req.body);
     const {
       shipDate,
