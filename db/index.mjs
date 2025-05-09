@@ -1,9 +1,13 @@
-import 'dotenv/config';
-import { drizzle } from 'drizzle-orm/libsql';
-import { createClient } from '@libsql/client';
-import * as schema from './schema.mjs';
+import "dotenv/config";
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
+import * as schema from "./schema.mjs";
 
-const client = createClient({ url: process.env.DB_FILE_NAME });
-const db = drizzle(client, { schema });
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not set");
+}
 
-export { db, schema };
+const connectionString = process.env.DATABASE_URL;
+
+const sql = neon(connectionString);
+export const db = drizzle({ client: sql, schema });

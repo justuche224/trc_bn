@@ -1,5 +1,6 @@
 import express from "express";
-import { db, schema } from "../db/index.mjs";
+const { db } = require("../db/index.mjs");
+const { trackings } = require("../db/schema.mjs");
 import { eq } from "drizzle-orm";
 
 const router = express.Router();
@@ -10,7 +11,7 @@ router.get("/tracking/:trackingNumber", async (req, res) => {
     const { trackingNumber } = req.params;
 
     const tracking = await db.query.trackings.findFirst({
-      where: eq(schema.trackings.trackingNumber, trackingNumber),
+      where: eq(trackings.trackingNumber, trackingNumber),
     });
 
     if (!tracking) {

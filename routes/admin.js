@@ -3,7 +3,8 @@ const router = express.Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { generateTrackingNumber } = require("../utils/trackingGenerator.mjs");
-const { db, schema } = require("../db/index.mjs");
+const { db } = require("../db/index.mjs");
+const { admins,trackings } = require("../db/schema.mjs");
 const { eq, like } = require("drizzle-orm");
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -37,7 +38,7 @@ router.post("/login", async (req, res) => {
     }
 
     const adminUser = await db.query.admins.findFirst({
-      where: eq(schema.admins.username, username),
+      where: eq(admins.username, username),
     });
     console.log("adminUser:", adminUser);
     if (!adminUser) {
@@ -122,7 +123,7 @@ router.post("/tracking", verifyJwt, async (req, res) => {
     };
 
     const [createdTracking] = await db
-      .insert(schema.trackings)
+      .insert(trackings)
       .values(newTrackingData)
       .returning(); // Return the created object
     console.log(createdTracking);
@@ -154,7 +155,7 @@ router.get("/tracking/:trackingNumber", verifyJwt, async (req, res) => {
   try {
     const trackingNumber = req.params.trackingNumber;
     const tracking = await db.query.trackings.findFirst({
-      where: eq(schema.trackings.trackingNumber, trackingNumber),
+      where: eq(trackings.trackingNumber, trackingNumber),
     });
 
     if (!tracking) {
@@ -183,9 +184,9 @@ router.put("/tracking/:trackingNumber", verifyJwt, async (req, res) => {
     delete updates.id;
 
     const [updatedTracking] = await db
-      .update(schema.trackings)
+      .update(trackings)
       .set(updates)
-      .where(eq(schema.trackings.trackingNumber, trackingNumber))
+      .where(eq(trackings.trackingNumber, trackingNumber))
       .returning();
 
     if (!updatedTracking) {
@@ -203,9 +204,9 @@ router.delete("/tracking/:trackingNumber", verifyJwt, async (req, res) => {
   try {
     const trackingNumber = req.params.trackingNumber;
     const result = await db
-      .delete(schema.trackings)
-      .where(eq(schema.trackings.trackingNumber, trackingNumber))
-      .returning({ id: schema.trackings.id }); // Check if anything was deleted
+      .delete(trackings)
+      .where(eq(trackings.trackingNumber, trackingNumber))
+      .returning({ id: trackings.id }); // Check if anything was deleted
 
     if (result.length === 0) {
       return res.status(404).json({ message: "Tracking not found" });
@@ -223,8 +224,8 @@ router.get("/tracking/search/:query", verifyJwt, async (req, res) => {
     const query = `%${req.params.query}%`;
     const results = await db
       .select()
-      .from(schema.trackings)
-      .where(like(schema.trackings.trackingNumber, query));
+      .from(trackings)
+      .where(like(trackings.trackingNumber, query));
 
     res.json(results);
   } catch (error) {

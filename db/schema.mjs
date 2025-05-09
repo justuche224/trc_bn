@@ -1,17 +1,17 @@
-import { text, integer, sqliteTable } from "drizzle-orm/sqlite-core";
+import { text, pgTable, serial, timestamp } from "drizzle-orm/pg-core";
 
-export const admins = sqliteTable("admins", {
-  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+export const admins = pgTable("admins", {
+  id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
 });
 
-export const trackings = sqliteTable("trackings", {
-  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+export const trackings = pgTable("trackings", {
+  id: serial("id").primaryKey(),
   trackingNumber: text("trackingNumber").notNull().unique(),
-  shipDate: integer("shipDate", { mode: "timestamp" }), // Store dates as timestamps (Unix epoch seconds or milliseconds)
-  deliveryDate: integer("deliveryDate", { mode: "timestamp" }),
-  estimatedDeliveryDate: integer("estimatedDeliveryDate", { mode: "timestamp" }),
+  shipDate: timestamp("shipDate"),
+  deliveryDate: timestamp("deliveryDate"),
+  estimatedDeliveryDate: timestamp("estimatedDeliveryDate"),
   recipientName: text("recipientName").notNull(),
   recipientPhone: text("recipientPhone").notNull(),
   destination: text("destination").notNull(),
@@ -19,4 +19,3 @@ export const trackings = sqliteTable("trackings", {
   status: text("status").notNull(),
   service: text("service").notNull(),
 });
-
