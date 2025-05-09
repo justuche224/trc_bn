@@ -1,6 +1,6 @@
 import express from "express";
-const { db } = require("../db/index.mjs");
-const { trackings } = require("../db/schema.mjs");
+import { db } from "../db/index.mjs";
+import { trackings } from "../db/schema.mjs";
 import { eq } from "drizzle-orm";
 
 const router = express.Router();
